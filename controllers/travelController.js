@@ -2,8 +2,13 @@ import { generateItinerary } from "../services/aiService.js";
 
 export const getTravelIdeas = async (req, res) => {
   try {
-    const { start, destination, days, budget } = req.body;
-    const itinerary = await generateItinerary(start, destination, days, budget);
+    const { destination, days, budget, interests } = req.body;
+    const itinerary = await generateItinerary(
+      destination,
+      days,
+      budget,
+      interests
+    );
     res.json({ success: true, itinerary });
   } catch (error) {
     console.error(error);
