@@ -3,6 +3,7 @@ package com.back.atlas.service;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -13,13 +14,10 @@ public class EmailService {
     @Autowired
     private JavaMailSender mailSender;
 
+    @Value("${SPRING_MAIL_USERNAME}")
+    private String email;
+
     public void sendResetPasswordEmail(String to, String link) {
-//        SimpleMailMessage message = new SimpleMailMessage();
-//        message.setTo(to);
-//        message.setSubject("Password Reset Request");
-//        message.setText("Click here to reset your password: " + link);
-//        message.setFrom("noreply@atlas.com");
-//        mailSender.send(message);
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
@@ -27,6 +25,8 @@ public class EmailService {
             helper.setTo(to);
             helper.setSubject("Reset your password");
             helper.setFrom("noreply@atlas.com");
+            helper.setReplyTo(email);
+
 
             String htmlContent = buildResetPasswordEmail(link);
             helper.setText(htmlContent, true);
