@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -65,6 +66,31 @@ public class AuthService {
     public void requestPasswordReset(String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        System.out.println("user found - ID: " + user.getId());
+
+        System.out.println("Before finding expired tokens");
+        List<PasswordResetToken> expiredTokens = passwordResetTokenRepository
+                .findByUserIdAndExpiryDateBefore(user.getId(), LocalDateTime.now());
+
+        System.out.println("expiredTokens: " + expiredTokens);
+
+        if (!expiredTokens.isEmpty()) {
+            passwordResetTokenRepository.deleteAll(expiredTokens);
+            System.out.println("Deleted " + expiredTokens.size() + " expired tokens");
+        }
+
+        System.out.println("Before finding active tokens");
+        List<PasswordResetToken> activeTokens = passwordResetTokenRepository
+                .findByUserIdAndExpiryDateAfter(user.getId(), LocalDateTime.now());
+
+        System.out.println("activeTokens: " + activeTokens.size());
+
+        if (!activeTokens.isEmpty()) {
+            System.out.println("A password reset token has already been generated for this user. Please check your email or wait for it to expire.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "A password reset token has already been generated for this user. Please check your email or wait for it to expire.");
+        }
 
         String token = UUID.randomUUID().toString();
         PasswordResetToken resetToken = new PasswordResetToken();

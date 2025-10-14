@@ -9,6 +9,8 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
+import java.io.UnsupportedEncodingException;
+
 @Service
 public class EmailService {
     @Autowired
@@ -24,8 +26,8 @@ public class EmailService {
 
             helper.setTo(to);
             helper.setSubject("Reset your password");
-            helper.setFrom("noreply@atlas.com");
-            helper.setReplyTo(email);
+            helper.setFrom("noreply@atlas.com", "Atlas Support");
+            // helper.setReplyTo(email);
 
 
             String htmlContent = buildResetPasswordEmail(link);
@@ -34,6 +36,8 @@ public class EmailService {
             mailSender.send(message);
         } catch (MessagingException e) {
             throw new RuntimeException("Error while sending reset password email", e);
+        } catch (UnsupportedEncodingException e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -43,7 +47,7 @@ public class EmailService {
         <body style="font-family: Arial, sans-serif; background-color: #f7f9fc; padding: 20px;">
             <table align="center" width="100%%" style="max-width: 600px; background: #ffffff; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
                 <tr>
-                    <td style="background-color: black; color: white; display: flex; align-items: center: justify-content: center; padding: 20px;">
+                    <td style="background-color: black; color: white; display: flex; align-items: center; justify-content: center; padding: 20px; text-align: center">
                         <h2>Reset Your Password</h2>
                     </td>
                 </tr>

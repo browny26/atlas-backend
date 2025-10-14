@@ -52,15 +52,8 @@ public class AuthController {
 
     @PostMapping("/request-reset-password")
     public ResponseEntity<?> requestPasswordReset(@RequestBody RequestPasswordResetRequest request) {
-        try {
-            authService.requestPasswordReset(request.getEmail());
-            return ResponseEntity.ok().body(Map.of("message", "Password reset link sent to email."));
-        } catch (ResponseStatusException e) {
-            return ResponseEntity.ok().body(Map.of("message", "If the email exists, a reset link has been sent."));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "An error occurred while processing your request."));
-        }
+        authService.requestPasswordReset(request.getEmail());
+        return ResponseEntity.ok().body(Map.of("message", "Password reset link sent to email."));
     }
 
     @PostMapping("/reset-password")
