@@ -17,17 +17,22 @@
 
 ---
 
-## 🌍 Overview
-
-The **Atlas Backend** is a robust and modular **Spring Boot application** that powers the entire Atlas ecosystem.  
-It handles user authentication, travel data management, and AI-powered itinerary recommendations, integrating multiple third-party services to deliver a smooth and smart travel experience.
-
 ### 🔗 Integrations
 - **Amadeus API** → Flight & activity data  
 - **Supabase** → Secure file and image storage  
 - **Google OAuth + JWT** → Authentication & authorization  
 - **Google Mail Service** → Password reset via email  
 - **Groq + OpenAI** → AI-driven travel recommendations  
+
+---
+
+## 🌐 Live Demo
+
+[atlas.vercel.app](https://atlas-works.vercel.app)
+
+## 🗺️ Related Project
+
+**[Atlas Frontend (React + Vite)](https://github.com/browny26/atlas-frontend)**
 
 ---
 
@@ -133,12 +138,6 @@ graph TD;
   Backend --> Amadeus[Travel API];
   Backend --> Groq[AI Recommendations];
 ```
-
----
-
-## 🗺️ Related Project
-
-**[Atlas Frontend (React + Vite)](https://github.com/browny26/atlas-frontend)**
 
 ---
 
