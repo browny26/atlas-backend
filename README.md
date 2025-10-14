@@ -70,21 +70,28 @@ It handles user authentication, travel data management, and AI-powered itinerary
 
 1. Clone the repository:
    
-   ``` git clone https://github.com/browny26/atlas-backend.git ```
-   
-   ```cd atlas-backend```
+   ```
+   git clone https://github.com/browny26/atlas-backend.git 
+   cd atlas-backend
+   ```
    
 3. Build the project:
 
-   ```./mvnw clean install```
+   ```
+   ./mvnw clean install
+   ```
 
 3. Run the application:
 
-   ```./mvnw spring-boot:run```
+   ```
+   ./mvnw spring-boot:run
+   ```
 
-4. The API will be available at:
+5. The API will be available at:
 
-   ```http://localhost:8080```
+   ```
+   http://localhost:8080
+   ```
 
 ## ⚙️ Configuration
 
@@ -109,6 +116,23 @@ Update this file with your own credentials and API keys:
 | `/api/itinerary` | Create, edit & retrieve itineraries |
 | `/api/amadeus`   | Integration with Amadeus travel API |
 | `/api/storage`   | File upload & download via Supabase |
+
+---
+
+## 🧭 Architecture Overview
+
+The backend follows a **modular layered architecture**, ensuring scalability and maintainability.
+
+```mermaid
+graph TD;
+  User --> Frontend[React App];
+  Frontend --> Backend[Spring Boot API];
+  Backend --> PostgreSQL[(Database)];
+  Backend --> Supabase[Image Storage];
+  Backend --> Google[OAuth & Mail Service];
+  Backend --> Amadeus[Travel API];
+  Backend --> Groq[AI Recommendations];
+```
 
 ---
 
