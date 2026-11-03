@@ -24,7 +24,6 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 
 import java.util.List;
 import java.util.Map;
@@ -77,13 +76,14 @@ public class ItineraryController {
                     }
                 });
                 emitter.complete();
+            } catch (ClientDisconnectedException e) {
+                // The browser closed the stream (page left, or result already received).
+                log.debug("Client left the itinerary stream");
             } catch (ResponseStatusException e) {
-                send(emitter, "error", Map.of("message", Objects.requireNonNullElse(e.getReason(), "Invalid request")));
-                emitter.complete();
+                sendErrorAndComplete(emitter, Objects.requireNonNullElse(e.getReason(), "Invalid request"));
             } catch (Exception e) {
                 log.warn("Itinerary stream failed: {}", e.getMessage());
-                send(emitter, "error", Map.of("message", "The itinerary generator is temporarily unavailable"));
-                emitter.complete();
+                sendErrorAndComplete(emitter, "The itinerary generator is temporarily unavailable");
             }
         });
         return emitter;
@@ -98,9 +98,25 @@ public class ItineraryController {
     private static void send(SseEmitter emitter, String event, Object data) {
         try {
             emitter.send(SseEmitter.event().name(event).data(data, MediaType.APPLICATION_JSON));
-        } catch (IOException e) {
+        } catch (IOException | IllegalStateException e) {
             // The client went away: stop producing events.
-            throw new UncheckedIOException(e);
+            throw new ClientDisconnectedException(e);
+        }
+    }
+
+    private static void sendErrorAndComplete(SseEmitter emitter, String message) {
+        try {
+            send(emitter, "error", Map.of("message", message));
+            emitter.complete();
+        } catch (ClientDisconnectedException e) {
+            log.debug("Client left before the error could be sent");
+        }
+    }
+
+    /** Thrown from the stream listener when the browser has closed the connection. */
+    static final class ClientDisconnectedException extends RuntimeException {
+        ClientDisconnectedException(Throwable cause) {
+            super(cause);
         }
     }
 
