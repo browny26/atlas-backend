@@ -3,10 +3,12 @@ package com.back.atlas.service;
 import com.back.atlas.dto.UserRequest;
 import com.back.atlas.dto.UserResponse;
 import com.back.atlas.entity.User;
+import com.back.atlas.repository.ItineraryRepository;
 import com.back.atlas.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
@@ -14,6 +16,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final ItineraryRepository itineraryRepository;
 
     public UserResponse findById(Long id) {
         return userRepository.findById(id)
@@ -39,10 +42,13 @@ public class UserService {
         return new UserResponse(user);
     }
 
+    /** Deletes the account and its itineraries (reset tokens are removed by ON DELETE CASCADE). */
+    @Transactional
     public void deleteUser(Long id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
+        itineraryRepository.deleteByUserId(id);
         userRepository.delete(user);
     }
 }
