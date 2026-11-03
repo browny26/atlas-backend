@@ -1,10 +1,18 @@
 package com.back.atlas.dto;
 
-import jakarta.persistence.Column;
-import lombok.*;
+import com.google.gson.annotations.SerializedName;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
 import java.util.List;
 
+/**
+ * Body of POST /save: the frontend sends back the GeneratedItinerary it received,
+ * so the JSON keys are snake_case (deserialized by Gson).
+ */
 @Getter
 @Setter
 @AllArgsConstructor
@@ -13,14 +21,21 @@ import java.util.List;
 public class SaveItineraryRequest {
 
     private String destination;
-    private String total_budget;
-    private int total_days;
+
+    @SerializedName("total_budget")
+    private String totalBudget;
+
+    @SerializedName("total_days")
+    private int totalDays;
 
     private AccommodationDTO accommodation;
     private List<DayItineraryDTO> itinerary;
     private List<String> tips;
 
+    @SerializedName(value = "total_estimated_cost", alternate = "totalEstimatedCost")
     private String totalEstimatedCost;
+
+    @SerializedName(value = "budget_status", alternate = "budgetStatus")
     private String budgetStatus;
 
     @Getter
@@ -30,6 +45,8 @@ public class SaveItineraryRequest {
     public static class AccommodationDTO {
         private String name;
         private String cost;
+        private String type;
+        private String details;
     }
 
     @Getter

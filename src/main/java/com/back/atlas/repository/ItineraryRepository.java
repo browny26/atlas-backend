@@ -1,7 +1,6 @@
 package com.back.atlas.repository;
 
 import com.back.atlas.entity.Itinerary;
-import com.back.atlas.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -14,7 +13,7 @@ public interface ItineraryRepository extends JpaRepository<Itinerary, Long> {
 
     Optional<Itinerary> findByIdAndUserId(Long id, Long userId);
 
-    List<Itinerary> findByDestinationContainingIgnoreCase(String destination);
+    List<Itinerary> findByUserIdAndDestinationContainingIgnoreCase(Long userId, String destination);
 
     long countByUserId(Long userId);
 }
