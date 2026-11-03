@@ -7,6 +7,10 @@ public record AiServiceRequest(
         String destination,
         int days,
         double budgetEur,
-        List<String> interests
+        List<String> interests,
+        List<KnownActivity> knownActivities
 ) {
+    /** A real bookable activity (from Amadeus) the model should prefer: grounding. */
+    public record KnownActivity(String name, Double priceEur) {
+    }
 }

@@ -41,7 +41,6 @@ public class AmadeusController {
     @GetMapping("/tours-and-activities")
     public PaginatedResponse getToursAndActivities(@RequestParam double latitude, @RequestParam double longitude, @RequestParam(defaultValue = "1") int radius, @RequestParam(defaultValue = "1") int page,
                                                    @RequestParam(defaultValue = "10") int size) throws ResponseException {
-        System.out.println("Latitude: " + latitude + ", Longitude: " + longitude + ", Radius: " + radius + ", Page: " + page + ", Size: " + size);
         return amadeusService.getToursAndActivities(latitude,longitude,radius, page, size);
     }
 

@@ -5,6 +5,7 @@ import com.amadeus.Params;
 import com.amadeus.Response;
 import com.amadeus.exceptions.ResponseException;
 import com.amadeus.resources.*;
+import com.back.atlas.client.ai.AiServiceRequest.KnownActivity;
 import com.back.atlas.dto.PaginatedResponse;
 import com.fasterxml.jackson.annotation.JsonValue;
 import com.google.gson.JsonArray;
@@ -13,6 +14,7 @@ import com.google.gson.JsonObject;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -88,6 +90,42 @@ public class AmadeusService {
         int totalPages = (int) Math.ceil((double) total / size);
 
         return new PaginatedResponse(page, size, total, totalPages, paged, hasNext, hasPrevious);
+    }
+
+    /**
+     * Real activities near a city, used to ground AI itineraries.
+     * Returns an empty list when the city is unknown to Amadeus.
+     */
+    public List<KnownActivity> findActivities(String city, int limit) throws ResponseException {
+        Location[] cities = amadeus.referenceData.locations.get(Params
+                .with("keyword", city)
+                .and("subType", "CITY")
+                .and("page[limit]", 1));
+        if (cities.length == 0 || cities[0].getGeoCode() == null) {
+            return List.of();
+        }
+        Activity[] activities = amadeus.shopping.activities.get(Params
+                .with("latitude", cities[0].getGeoCode().getLatitude())
+                .and("longitude", cities[0].getGeoCode().getLongitude())
+                .and("radius", 10));
+        return Arrays.stream(activities)
+                .filter(a -> a.getName() != null && !a.getName().isBlank())
+                .limit(limit)
+                .map(a -> new KnownActivity(a.getName(), priceInEuros(a)))
+                .toList();
+    }
+
+    /** Only EUR prices are passed on: converting currencies is out of scope here. */
+    private static Double priceInEuros(Activity activity) {
+        Activity.ElementaryPrice price = activity.getPrice();
+        if (price == null || price.getAmount() == null || !"EUR".equals(price.getCurrencyCode())) {
+            return null;
+        }
+        try {
+            return Double.parseDouble(price.getAmount());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     public JsonObject getAirportAndCityInfo(String keyword, String subType) throws ResponseException {

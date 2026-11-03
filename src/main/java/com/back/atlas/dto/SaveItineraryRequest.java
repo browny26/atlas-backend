@@ -32,6 +32,8 @@ public class SaveItineraryRequest {
     private List<DayItineraryDTO> itinerary;
     private List<String> tips;
 
+    private List<String> interests;
+
     @SerializedName(value = "total_estimated_cost", alternate = "totalEstimatedCost")
     private String totalEstimatedCost;
 

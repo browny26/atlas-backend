@@ -30,14 +30,17 @@ public class AiServiceConfig {
                 .build();
     }
 
-    /** Shared by the bean above and by tests (which bind a mock server to the builder). */
-    public static RestClient.Builder configure(RestClient.Builder builder, AiServiceProperties properties) {
-        // The Python service speaks snake_case JSON; Java records stay camelCase.
-        ObjectMapper mapper = JsonMapper.builder()
+    /** The Python service speaks snake_case JSON; Java records stay camelCase. */
+    public static ObjectMapper snakeCaseMapper() {
+        return JsonMapper.builder()
                 .propertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
                 .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
                 .build();
+    }
 
+    /** Shared by the bean above and by tests (which bind a mock server to the builder). */
+    public static RestClient.Builder configure(RestClient.Builder builder, AiServiceProperties properties) {
+        ObjectMapper mapper = snakeCaseMapper();
         return builder
                 .baseUrl(properties.url())
                 .defaultHeader("X-API-Key", properties.apiKey())

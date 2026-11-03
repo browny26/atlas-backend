@@ -7,6 +7,7 @@ import com.back.atlas.security.JwtService;
 import com.back.atlas.service.AuthService;
 import com.back.atlas.service.GoogleAuthService;
 import io.jsonwebtoken.Claims;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -25,12 +26,12 @@ public class AuthController {
     private final GoogleAuthService googleAuthService;
 
     @PostMapping("/register")
-    public AuthResponse register(@RequestBody RegisterRequest request) {
+    public AuthResponse register(@Valid @RequestBody RegisterRequest request) {
         return authService.register(request);
     }
 
     @PostMapping("/login")
-    public AuthResponse login(@RequestBody LoginRequest request) {
+    public AuthResponse login(@Valid @RequestBody LoginRequest request) {
         return authService.login(request);
     }
 
@@ -63,13 +64,7 @@ public class AuthController {
     }
 
     @PostMapping("/google")
-    public ResponseEntity<?> googleLoginDirect(@RequestBody GoogleLoginRequest request) {
-        try {
-            GoogleAuthResponse response = googleAuthService.authenticateWithGoogleData(request);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(e.getMessage());
-        }
+    public GoogleAuthResponse googleLogin(@Valid @RequestBody GoogleLoginRequest request) {
+        return googleAuthService.authenticate(request);
     }
 }

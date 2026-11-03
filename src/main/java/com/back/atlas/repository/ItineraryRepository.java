@@ -16,4 +16,6 @@ public interface ItineraryRepository extends JpaRepository<Itinerary, Long> {
     List<Itinerary> findByUserIdAndDestinationContainingIgnoreCase(Long userId, String destination);
 
     long countByUserId(Long userId);
+
+    void deleteByUserId(Long userId);
 }
