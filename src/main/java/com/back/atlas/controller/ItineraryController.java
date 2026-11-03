@@ -57,36 +57,39 @@ public class ItineraryController {
     @PostMapping(value = "/generate/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamItinerary(@Valid @RequestBody AiItineraryRequest request) {
         SseEmitter emitter = new SseEmitter(STREAM_TIMEOUT_MS);
-        streamExecutor.execute(() -> {
-            try {
-                generationService.stream(request, new ItineraryStreamListener() {
-                    @Override
-                    public void onDay(DayItinerary day) {
-                        send(emitter, "day", day);
-                    }
-
-                    @Override
-                    public void onStatus(String message) {
-                        send(emitter, "status", Map.of("message", message));
-                    }
-
-                    @Override
-                    public void onResult(GeneratedItinerary itinerary) {
-                        send(emitter, "result", new AiItineraryResponse(true, itinerary));
-                    }
-                });
-                emitter.complete();
-            } catch (ClientDisconnectedException e) {
-                // The browser closed the stream (page left, or result already received).
-                log.debug("Client left the itinerary stream");
-            } catch (ResponseStatusException e) {
-                sendErrorAndComplete(emitter, Objects.requireNonNullElse(e.getReason(), "Invalid request"));
-            } catch (Exception e) {
-                log.warn("Itinerary stream failed: {}", e.getMessage());
-                sendErrorAndComplete(emitter, "The itinerary generator is temporarily unavailable");
-            }
-        });
+        streamExecutor.execute(() -> runStream(request, emitter));
         return emitter;
+    }
+
+    /** Forwards the generation to the emitter; runs on a virtual thread. Package-private for tests. */
+    void runStream(AiItineraryRequest request, SseEmitter emitter) {
+        try {
+            generationService.stream(request, new ItineraryStreamListener() {
+                @Override
+                public void onDay(DayItinerary day) {
+                    send(emitter, "day", day);
+                }
+
+                @Override
+                public void onStatus(String message) {
+                    send(emitter, "status", Map.of("message", message));
+                }
+
+                @Override
+                public void onResult(GeneratedItinerary itinerary) {
+                    send(emitter, "result", new AiItineraryResponse(true, itinerary));
+                }
+            });
+            emitter.complete();
+        } catch (ClientDisconnectedException e) {
+            // The browser closed the stream (page left, or result already received).
+            log.debug("Client left the itinerary stream");
+        } catch (ResponseStatusException e) {
+            sendErrorAndComplete(emitter, Objects.requireNonNullElse(e.getReason(), "Invalid request"));
+        } catch (Exception e) {
+            log.warn("Itinerary stream failed: {}", e.getMessage());
+            sendErrorAndComplete(emitter, "The itinerary generator is temporarily unavailable");
+        }
     }
 
     /** Rewrites one day of the itinerary the user is looking at, following optional feedback. */

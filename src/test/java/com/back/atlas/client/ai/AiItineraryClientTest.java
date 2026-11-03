@@ -15,6 +15,8 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.*;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
@@ -112,6 +114,21 @@ class AiItineraryClientTest {
         assertThatThrownBy(() -> client.streamItinerary(
                 new AiServiceRequest("Rome", 1, 300, List.of(), List.of()), mock(AiStreamListener.class)))
                 .isInstanceOf(AiServiceException.class);
+    }
+
+    @Test
+    void listenerExceptionsEscapeTheStreamUnwrapped() {
+        // The controller throws from the listener when the browser has gone: that must not
+        // be turned into an AiServiceException, or it would be reported as an AI failure.
+        server.expect(requestTo("http://ai.test/v1/itineraries/stream"))
+                .andRespond(withSuccess("event: status\ndata: {\"message\": \"working\"}\n\n", MediaType.TEXT_EVENT_STREAM));
+        RuntimeException clientGone = new RuntimeException("client disconnected");
+        AiStreamListener listener = mock(AiStreamListener.class);
+        doThrow(clientGone).when(listener).onStatus(any());
+
+        assertThatThrownBy(() -> client.streamItinerary(
+                new AiServiceRequest("Rome", 1, 300, List.of(), List.of()), listener))
+                .isSameAs(clientGone);
     }
 
     @Test
