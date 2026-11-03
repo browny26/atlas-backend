@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
@@ -56,6 +57,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ApiError> handleUploadTooLarge(MaxUploadSizeExceededException ex) {
         return build(HttpStatus.PAYLOAD_TOO_LARGE, "File is too large (max 5 MB)", null);
+    }
+
+    /** The client closed the connection (e.g. a finished SSE stream): nothing to answer. */
+    @ExceptionHandler(AsyncRequestNotUsableException.class)
+    public void handleClientDisconnect(AsyncRequestNotUsableException ex) {
+        log.debug("Client disconnected: {}", ex.getMessage());
     }
 
     @ExceptionHandler(Exception.class)

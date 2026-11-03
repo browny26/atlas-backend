@@ -88,7 +88,8 @@ class ItineraryControllerTest extends ControllerTestSupport {
                 .andExpect(request().asyncStarted())
                 .andReturn();
 
-        String body = awaitBody(result, "event:result");
+        // Wait for the result data, not just its "event:" line: the two are written separately.
+        String body = awaitBody(result, "\"total_budget\"");
         assertThat(body).contains("event:status").contains("\"total_budget\":\"€500\"");
     }
 
