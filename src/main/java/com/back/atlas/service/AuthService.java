@@ -8,15 +8,19 @@ import com.back.atlas.repository.PasswordResetTokenRepository;
 import com.back.atlas.repository.UserRepository;
 import com.back.atlas.security.JwtService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -25,6 +29,9 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final EmailService emailService;
+
+    @Value("${app.frontend-url}")
+    private String frontendUrl;
 
     public AuthResponse register(RegisterRequest request) {
         User user = User.builder()
@@ -47,12 +54,10 @@ public class AuthService {
     }
 
     public AuthResponse login(LoginRequest request) {
+        // Same error for unknown email and wrong password: do not reveal which accounts exist.
         User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
-
-        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-            throw new RuntimeException("Invalid credentials");
-        }
+                .filter(u -> u.getPassword() != null && passwordEncoder.matches(request.getPassword(), u.getPassword()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials"));
 
         String token = jwtService.generateToken(user);
         AuthResponse response = new AuthResponse();
@@ -67,27 +72,27 @@ public class AuthService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
-        System.out.println("user found - ID: " + user.getId());
+        log.debug("user found - ID: " + user.getId());
 
-        System.out.println("Before finding expired tokens");
+        log.debug("Before finding expired tokens");
         List<PasswordResetToken> expiredTokens = passwordResetTokenRepository
                 .findByUserIdAndExpiryDateBefore(user.getId(), LocalDateTime.now());
 
-        System.out.println("expiredTokens: " + expiredTokens);
+        log.debug("expiredTokens: " + expiredTokens);
 
         if (!expiredTokens.isEmpty()) {
             passwordResetTokenRepository.deleteAll(expiredTokens);
-            System.out.println("Deleted " + expiredTokens.size() + " expired tokens");
+            log.debug("Deleted " + expiredTokens.size() + " expired tokens");
         }
 
-        System.out.println("Before finding active tokens");
+        log.debug("Before finding active tokens");
         List<PasswordResetToken> activeTokens = passwordResetTokenRepository
                 .findByUserIdAndExpiryDateAfter(user.getId(), LocalDateTime.now());
 
-        System.out.println("activeTokens: " + activeTokens.size());
+        log.debug("activeTokens: " + activeTokens.size());
 
         if (!activeTokens.isEmpty()) {
-            System.out.println("A password reset token has already been generated for this user. Please check your email or wait for it to expire.");
+            log.debug("A password reset token has already been generated for this user. Please check your email or wait for it to expire.");
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "A password reset token has already been generated for this user. Please check your email or wait for it to expire.");
         }
@@ -100,7 +105,10 @@ public class AuthService {
 
         passwordResetTokenRepository.save(resetToken);
 
-        String resetLink = "http://localhost:5173/reset-password?token=" + token;
+        String resetLink = UriComponentsBuilder.fromUriString(frontendUrl)
+                .path("/reset-password")
+                .queryParam("token", token)
+                .toUriString();
         emailService.sendResetPasswordEmail(user.getEmail(), resetLink);
     }
 

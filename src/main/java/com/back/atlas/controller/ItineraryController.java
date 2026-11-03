@@ -1,61 +1,66 @@
 package com.back.atlas.controller;
 
-import com.back.atlas.dto.*;
-import com.back.atlas.entity.Itinerary;
-import com.back.atlas.mapper.ItineraryMapper;
+import com.back.atlas.dto.AiItineraryRequest;
+import com.back.atlas.dto.AiItineraryResponse;
+import com.back.atlas.dto.ItineraryResponse;
+import com.back.atlas.dto.SaveItineraryRequest;
+import com.back.atlas.dto.UpdateItineraryRequest;
+import com.back.atlas.entity.User;
+import com.back.atlas.service.ItineraryGenerationService;
 import com.back.atlas.service.ItineraryService;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
 
 @RestController
+@RequiredArgsConstructor
 @RequestMapping("/v1/api/itinerary")
 public class ItineraryController {
 
     private final ItineraryService itineraryService;
+    private final ItineraryGenerationService generationService;
 
-    public ItineraryController(ItineraryService itineraryService) {
-        this.itineraryService = itineraryService;
-    }
-
+    /** Public endpoint: errors are handled by GlobalExceptionHandler (400, 502). */
     @PostMapping("/generate")
-    public AiItineraryResponse getItineraryIdeas(@RequestBody AiItineraryRequest req) {
-        try {
-            Object itinerary = itineraryService.generateItinerary(req);
-            return new AiItineraryResponse(true, itinerary);
-        } catch (Exception e) {
-            e.printStackTrace();
-            return new AiItineraryResponse(false, "Error generating itinerary");
-        }
+    public AiItineraryResponse generateItinerary(@Valid @RequestBody AiItineraryRequest request) {
+        return new AiItineraryResponse(true, generationService.generate(request));
     }
 
+    /**
+     * The owner is always the authenticated user. The path variable is kept for compatibility
+     * with the frontend and must match the token's user.
+     */
     @PostMapping("/save/{userId}")
-    public Itinerary saveItinerary(@RequestBody SaveItineraryRequest dto, @PathVariable Long userId) {
-        Itinerary itinerary = ItineraryMapper.toEntity(dto);
-        return itineraryService.saveItineraryForUser(itinerary, userId);
+    public ItineraryResponse saveItinerary(@RequestBody SaveItineraryRequest request,
+                                           @PathVariable Long userId,
+                                           @AuthenticationPrincipal User currentUser) {
+        if (!currentUser.getId().equals(userId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Cannot save itineraries for another user");
+        }
+        return itineraryService.saveForCurrentUser(request);
     }
 
     @GetMapping("/user")
-    public ResponseEntity<List<ItineraryResponse>> getAllUserItineraries() {
-        List<ItineraryResponse> itineraries = itineraryService.getAllUserItineraries();
-        return ResponseEntity.ok(itineraries);
+    public List<ItineraryResponse> getAllUserItineraries() {
+        return itineraryService.getAllUserItineraries();
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ItineraryResponse> getItineraryById(@PathVariable Long id) {
-        ItineraryResponse itinerary = itineraryService.getItineraryById(id);
-        return ResponseEntity.ok(itinerary);
+    public ItineraryResponse getItineraryById(@PathVariable Long id) {
+        return itineraryService.getItineraryById(id);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<ItineraryResponse> updateItinerary(
-            @PathVariable Long id,
-            @Valid @RequestBody UpdateItineraryRequest request) {
-        ItineraryResponse updatedItinerary = itineraryService.updateItinerary(id, request);
-        return ResponseEntity.ok(updatedItinerary);
+    public ItineraryResponse updateItinerary(@PathVariable Long id,
+                                             @Valid @RequestBody UpdateItineraryRequest request) {
+        return itineraryService.updateItinerary(id, request);
     }
 
     @DeleteMapping("/{id}")
@@ -65,15 +70,12 @@ public class ItineraryController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<List<ItineraryResponse>> searchItineraries(
-            @RequestParam String destination) {
-        List<ItineraryResponse> itineraries = itineraryService.searchItineraries(destination);
-        return ResponseEntity.ok(itineraries);
+    public List<ItineraryResponse> searchItineraries(@RequestParam String destination) {
+        return itineraryService.searchItineraries(destination);
     }
 
     @GetMapping("/count")
-    public ResponseEntity<Map<String, Long>> getItineraryCount() {
-        long count = itineraryService.getItineraryCount();
-        return ResponseEntity.ok(Map.of("count", count));
+    public Map<String, Long> getItineraryCount() {
+        return Map.of("count", itineraryService.getItineraryCount());
     }
 }
