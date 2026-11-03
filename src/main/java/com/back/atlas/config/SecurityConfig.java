@@ -1,6 +1,8 @@
 package com.back.atlas.config;
 
+import com.back.atlas.security.RateLimitFilter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -17,9 +19,11 @@ import org.springframework.web.cors.CorsConfigurationSource;
 
 @Configuration
 @RequiredArgsConstructor
+@EnableConfigurationProperties(RateLimitProperties.class)
 public class SecurityConfig {
     private final JwtAuthenticationFilter jwtFilter;
     private final CorsConfigurationSource corsConfigurationSource;
+    private final RateLimitProperties rateLimitProperties;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -35,13 +39,21 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/v1/api/auth/**", "/amadeus/**", "/error").permitAll()
-                        // Generation is public (guests can try the planner); saving requires login.
-                        .requestMatchers(HttpMethod.POST, "/v1/api/itinerary/generate").permitAll()
+                        .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                        // Generation is public (guests can try the planner, rate limited);
+                        // saving requires login.
+                        .requestMatchers(HttpMethod.POST,
+                                "/v1/api/itinerary/generate",
+                                "/v1/api/itinerary/generate/stream",
+                                "/v1/api/itinerary/regenerate-day").permitAll()
                         .anyRequest().authenticated()
                 )
                 // 401 (not 403) when the token is missing: the frontend redirects to sign-in.
                 .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
-                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+                // After the JWT filter, so logged-in users are limited by id rather than by IP.
+                // Created here (not as a @Bean) so it is not also registered as a servlet filter.
+                .addFilterAfter(new RateLimitFilter(rateLimitProperties), JwtAuthenticationFilter.class);
 
         return http.build();
     }

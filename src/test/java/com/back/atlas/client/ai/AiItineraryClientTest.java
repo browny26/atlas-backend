@@ -10,10 +10,12 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.*;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
@@ -63,7 +65,7 @@ class AiItineraryClientTest {
                 .andRespond(withSuccess(RESPONSE, MediaType.APPLICATION_JSON));
 
         AiServiceResponse response = client.generateItinerary(
-                new AiServiceRequest("Rome", 1, 300, List.of("history")));
+                new AiServiceRequest("Rome", 1, 300, List.of("history"), List.of()));
 
         server.verify();
         assertThat(response.totalEstimatedCostEur()).isEqualTo(151.5);
@@ -73,10 +75,63 @@ class AiItineraryClientTest {
     }
 
     @Test
+    void streamParsesServerSentEvents() {
+        String day = """
+                {"day": 1, "morning": {"activity": "Colosseum", "time": "09:00", "cost_eur": 18.0},
+                 "afternoon": {"activity": "Pantheon", "time": "14:00", "cost_eur": 0.0},
+                 "evening": {"activity": "Dinner", "time": "20:00", "cost_eur": 33.5}}""".replace("\n", "");
+        String body = "event: day\ndata: " + day + "\n\n"
+                + "event: status\ndata: {\"message\": \"Fixing\"}\n\n"
+                + "event: result\ndata: " + RESPONSE.replace("\n", "") + "\n\n";
+        server.expect(requestTo("http://ai.test/v1/itineraries/stream"))
+                .andRespond(withSuccess(body, MediaType.TEXT_EVENT_STREAM));
+        List<String> events = new ArrayList<>();
+
+        client.streamItinerary(new AiServiceRequest("Rome", 1, 300, List.of(), List.of()), new AiStreamListener() {
+            public void onDay(AiServiceResponse.Day d) {
+                events.add("day:" + d.morning().activity());
+            }
+
+            public void onStatus(String message) {
+                events.add("status:" + message);
+            }
+
+            public void onResult(AiServiceResponse result) {
+                events.add("result:" + result.totalEstimatedCostEur());
+            }
+        });
+
+        assertThat(events).containsExactly("day:Colosseum", "status:Fixing", "result:151.5");
+    }
+
+    @Test
+    void streamErrorEventBecomesAiServiceException() {
+        server.expect(requestTo("http://ai.test/v1/itineraries/stream"))
+                .andRespond(withSuccess("event: error\ndata: {\"detail\": \"down\"}\n\n", MediaType.TEXT_EVENT_STREAM));
+
+        assertThatThrownBy(() -> client.streamItinerary(
+                new AiServiceRequest("Rome", 1, 300, List.of(), List.of()), mock(AiStreamListener.class)))
+                .isInstanceOf(AiServiceException.class);
+    }
+
+    @Test
+    void sendsKnownActivitiesInSnakeCase() {
+        server.expect(requestTo("http://ai.test/v1/itineraries"))
+                .andExpect(jsonPath("$.known_activities[0].name").value("Colosseum tour"))
+                .andExpect(jsonPath("$.known_activities[0].price_eur").value(45.0))
+                .andRespond(withSuccess(RESPONSE, MediaType.APPLICATION_JSON));
+
+        client.generateItinerary(new AiServiceRequest("Rome", 1, 300, List.of(),
+                List.of(new AiServiceRequest.KnownActivity("Colosseum tour", 45.0))));
+
+        server.verify();
+    }
+
+    @Test
     void serverErrorBecomesAiServiceException() {
         server.expect(requestTo("http://ai.test/v1/itineraries")).andRespond(withServerError());
 
-        assertThatThrownBy(() -> client.generateItinerary(new AiServiceRequest("Rome", 1, 300, List.of())))
+        assertThatThrownBy(() -> client.generateItinerary(new AiServiceRequest("Rome", 1, 300, List.of(), List.of())))
                 .isInstanceOf(AiServiceException.class);
     }
 }

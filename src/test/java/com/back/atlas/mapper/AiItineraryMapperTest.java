@@ -19,6 +19,12 @@ class AiItineraryMapperTest {
         assertThat(AiItineraryMapper.euros(amount)).isEqualTo(expected);
     }
 
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {"€16|16", "€110/night|110", "€20-€40|20", "€12,50|12.5", "free|0", "|0"})
+    void parsesEuros(String text, double expected) {
+        assertThat(AiItineraryMapper.parseEuros(text)).isEqualTo(expected);
+    }
+
     @Test
     void mapsToFrontendShape() {
         AiServiceResponse response = new AiServiceResponse(
