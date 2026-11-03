@@ -19,6 +19,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.net.Inet6Address;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.time.Duration;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -95,15 +98,29 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     /**
-     * Behind Render's proxy the client IP is in X-Forwarded-For. The last entry is the one
-     * added by the proxy itself; earlier entries can be forged by the client.
+     * X-Forwarded-For is trusted only when the direct peer is on a private network, i.e. a
+     * proxy or load balancer such as Render's. Then its last entry (added by that proxy) is
+     * the client; earlier entries can be forged. A client reaching the app directly from the
+     * internet has a public address, and its header is ignored.
      */
     static String clientIp(HttpServletRequest request) {
+        String peer = request.getRemoteAddr();
         String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
+        if (forwarded != null && !forwarded.isBlank() && isPrivateNetwork(peer)) {
             String[] hops = forwarded.split(",");
             return hops[hops.length - 1].trim();
         }
-        return request.getRemoteAddr();
+        return peer;
+    }
+
+    private static boolean isPrivateNetwork(String address) {
+        try {
+            // getRemoteAddr() is always an IP literal, so no DNS lookup happens here.
+            InetAddress ip = InetAddress.getByName(address);
+            return ip.isLoopbackAddress() || ip.isSiteLocalAddress()
+                    || (ip instanceof Inet6Address && (ip.getAddress()[0] & 0xFE) == 0xFC); // fc00::/7
+        } catch (UnknownHostException e) {
+            return false;
+        }
     }
 }

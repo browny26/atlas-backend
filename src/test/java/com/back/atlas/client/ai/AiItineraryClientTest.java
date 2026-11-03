@@ -115,6 +115,16 @@ class AiItineraryClientTest {
     }
 
     @Test
+    void streamEndingWithoutResultIsAFailure() {
+        server.expect(requestTo("http://ai.test/v1/itineraries/stream"))
+                .andRespond(withSuccess("event: status\ndata: {\"message\": \"working\"}\n\n", MediaType.TEXT_EVENT_STREAM));
+
+        assertThatThrownBy(() -> client.streamItinerary(
+                new AiServiceRequest("Rome", 1, 300, List.of(), List.of()), mock(AiStreamListener.class)))
+                .isInstanceOf(AiServiceException.class);
+    }
+
+    @Test
     void sendsKnownActivitiesInSnakeCase() {
         server.expect(requestTo("http://ai.test/v1/itineraries"))
                 .andExpect(jsonPath("$.known_activities[0].name").value("Colosseum tour"))

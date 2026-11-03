@@ -121,6 +121,33 @@ class ItineraryGenerationServiceTest {
     }
 
     @Test
+    void blankFeedbackIsSentAsNoFeedback() {
+        when(client.regenerateDay(any())).thenReturn(sampleResponse());
+        RegenerateDayRequest request = new RegenerateDayRequest();
+        request.setItinerary(displayedItinerary());
+        request.setDay(1);
+        request.setFeedback("   ");
+
+        service.regenerateDay(request);
+
+        ArgumentCaptor<AiRegenerateDayRequest> sent = ArgumentCaptor.forClass(AiRegenerateDayRequest.class);
+        verify(client).regenerateDay(sent.capture());
+        assertThat(sent.getValue().feedback()).isNull();
+    }
+
+    @Test
+    void regenerateDayRejectsNullDays() {
+        SaveItineraryRequest itinerary = displayedItinerary();
+        itinerary.setItinerary(java.util.Arrays.asList((DayItineraryDTO) null));
+        RegenerateDayRequest request = new RegenerateDayRequest();
+        request.setItinerary(itinerary);
+        request.setDay(1);
+
+        assertThatThrownBy(() -> service.regenerateDay(request)).isInstanceOf(ResponseStatusException.class);
+        verifyNoInteractions(client);
+    }
+
+    @Test
     void regenerateDayRejectsUnknownDay() {
         RegenerateDayRequest request = new RegenerateDayRequest();
         request.setItinerary(displayedItinerary());

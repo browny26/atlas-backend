@@ -2,19 +2,26 @@ package com.back.atlas.security;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.IOException;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withException;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 
+@ExtendWith(OutputCaptureExtension.class)
 class GoogleTokenVerifierTest {
 
     private static final String TOKENINFO = "https://oauth2.googleapis.com/tokeninfo?access_token=tok";
@@ -61,6 +68,15 @@ class GoogleTokenVerifierTest {
                 "{\"sub\":\"42\",\"email\":\"x@example.com\",\"email_verified\":false}", MediaType.APPLICATION_JSON));
 
         assertThatThrownBy(() -> verifier.verify("tok")).isInstanceOf(ResponseStatusException.class);
+    }
+
+    @Test
+    void networkErrorsDoNotLogTheToken(CapturedOutput output) {
+        server.expect(requestTo("https://oauth2.googleapis.com/tokeninfo?access_token=secret-token"))
+                .andRespond(withException(new IOException("connection reset")));
+
+        assertThatThrownBy(() -> verifier.verify("secret-token")).isInstanceOf(ResponseStatusException.class);
+        assertThat(output).contains("Google token verification failed").doesNotContain("secret-token");
     }
 
     @Test

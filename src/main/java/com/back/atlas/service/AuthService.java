@@ -10,12 +10,14 @@ import com.back.atlas.security.JwtService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -35,8 +37,9 @@ public class AuthService {
 
     public AuthResponse register(RegisterRequest request) {
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already registered");
+            throw emailAlreadyRegistered();
         }
+        requireBcryptCompatible(request.getPassword());
         User user = User.builder()
                 .firstName(request.getFirstName())
                 .lastName(request.getLastName())
@@ -45,7 +48,11 @@ public class AuthService {
                 .provider(AuthProvider.LOCAL)
                 .build();
 
-        userRepository.save(user);
+        try {
+            userRepository.saveAndFlush(user);
+        } catch (DataIntegrityViolationException e) {
+            throw emailAlreadyRegistered(); // two registrations raced past the check above
+        }
 
         String token = jwtService.generateToken(user);
         AuthResponse response = new AuthResponse();
@@ -125,9 +132,23 @@ public class AuthService {
         }
 
         User user = resetToken.getUser();
+        requireBcryptCompatible(request.getNewPassword());
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
 
         passwordResetTokenRepository.delete(resetToken);
+    }
+
+    private static ResponseStatusException emailAlreadyRegistered() {
+        return new ResponseStatusException(HttpStatus.CONFLICT, "Email already registered");
+    }
+
+    /** BCrypt only uses the first 72 bytes (not characters) and rejects longer input. */
+    private static void requireBcryptCompatible(String password) {
+        if (password == null || password.length() < 8
+                || password.getBytes(StandardCharsets.UTF_8).length > 72) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Password must be 8 to 72 bytes long");
+        }
     }
 }

@@ -59,7 +59,9 @@ public class AiItineraryClient {
                         }
                         try (BufferedReader reader = new BufferedReader(
                                 new InputStreamReader(res.getBody(), StandardCharsets.UTF_8))) {
-                            readEvents(reader, listener);
+                            if (!readEvents(reader, listener)) {
+                                throw new AiServiceException("AI stream ended without a result", null);
+                            }
                         }
                         return null;
                     });
@@ -69,8 +71,11 @@ public class AiItineraryClient {
         }
     }
 
-    /** Minimal SSE parser: "event:" and "data:" lines, an empty line ends the event. */
-    private void readEvents(BufferedReader reader, AiStreamListener listener) throws IOException {
+    /**
+     * Minimal SSE parser: "event:" and "data:" lines, an empty line ends the event.
+     * Returns true once the authoritative "result" event has been delivered.
+     */
+    private boolean readEvents(BufferedReader reader, AiStreamListener listener) throws IOException {
         String event = "message";
         StringBuilder data = new StringBuilder();
         String line;
@@ -80,24 +85,32 @@ public class AiItineraryClient {
             } else if (line.startsWith("data:")) {
                 data.append(line.substring(5).trim());
             } else if (line.isEmpty() && !data.isEmpty()) {
-                dispatch(event, data.toString(), listener);
+                if (dispatch(event, data.toString(), listener)) {
+                    return true;
+                }
                 event = "message";
                 data.setLength(0);
             }
         }
+        return false;
     }
 
-    private void dispatch(String event, String data, AiStreamListener listener) throws IOException {
+    /** Returns true for the final "result" event. */
+    private boolean dispatch(String event, String data, AiStreamListener listener) throws IOException {
         switch (event) {
             case "day" -> listener.onDay(mapper.readValue(data, AiServiceResponse.Day.class));
             case "status" -> listener.onStatus(mapper.readTree(data).path("message").asText());
-            case "result" -> listener.onResult(mapper.readValue(data, AiServiceResponse.class));
+            case "result" -> {
+                listener.onResult(mapper.readValue(data, AiServiceResponse.class));
+                return true;
+            }
             case "error" -> {
                 JsonNode detail = mapper.readTree(data).path("detail");
                 throw new AiServiceException("AI generation failed: " + detail.asText(), null);
             }
             default -> log.debug("Ignoring unknown SSE event '{}'", event);
         }
+        return false;
     }
 
     private AiServiceResponse post(String path, Object body) {

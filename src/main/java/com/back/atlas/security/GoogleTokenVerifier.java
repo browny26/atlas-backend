@@ -62,7 +62,8 @@ public class GoogleTokenVerifier {
             }
             return user;
         } catch (RestClientException e) {
-            log.warn("Google token verification failed: {}", e.getMessage());
+            // Never log e.getMessage(): I/O errors include the request URL, i.e. the token.
+            log.warn("Google token verification failed: {}", e.getClass().getSimpleName());
             throw unauthorized();
         }
     }

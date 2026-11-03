@@ -50,6 +50,24 @@ class ActivityGroundingServiceTest {
     }
 
     @Test
+    void timedOutLookupsAreCancelledAndDoNotLeakCapacity() throws Exception {
+        when(amadeus.findActivities(anyString(), anyInt())).thenAnswer(invocation -> {
+            Thread.sleep(5_000); // interrupted by the cancellation
+            return List.of();
+        });
+        ActivityGroundingService service = service(Duration.ofMillis(30));
+
+        // More calls than the in-flight limit (10): if cancelled lookups kept their permit,
+        // the later calls would skip Amadeus entirely.
+        for (int i = 0; i < 15; i++) {
+            service.findActivities("Paris");
+            Thread.sleep(20); // let the interrupted task finish
+        }
+
+        verify(amadeus, times(15)).findActivities("Paris", 10);
+    }
+
+    @Test
     void disabledMeansNoCall() {
         new ActivityGroundingService(amadeus, false, 10, Duration.ofSeconds(1)).findActivities("Paris");
 

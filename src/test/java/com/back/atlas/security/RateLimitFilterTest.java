@@ -48,10 +48,35 @@ class RateLimitFilterTest {
     }
 
     @Test
-    void usesTheLastForwardedForHop() {
+    void behindAPrivateProxyUsesTheLastForwardedForHop() {
         MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRemoteAddr("10.0.0.5"); // e.g. Render's load balancer
         request.addHeader("X-Forwarded-For", "6.6.6.6, 3.3.3.3");
 
         assertThat(RateLimitFilter.clientIp(request)).isEqualTo("3.3.3.3");
+    }
+
+    @Test
+    void directClientsCannotSpoofTheirAddress() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRemoteAddr("203.0.113.7"); // public address: not a proxy
+        request.addHeader("X-Forwarded-For", "1.2.3.4");
+
+        assertThat(RateLimitFilter.clientIp(request)).isEqualTo("203.0.113.7");
+
+        // A different forged header on every request still hits the same bucket.
+        for (int i = 0; i < 2; i++) {
+            assertThat(callWithForgedHeader("9.9.9." + i).getStatus()).isEqualTo(200);
+        }
+        assertThat(callWithForgedHeader("9.9.9.99").getStatus()).isEqualTo(429);
+    }
+
+    private MockHttpServletResponse callWithForgedHeader(String forged) throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/v1/api/itinerary/generate");
+        request.setRemoteAddr("198.51.100.20");
+        request.addHeader("X-Forwarded-For", forged);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        filter.doFilter(request, response, new MockFilterChain());
+        return response;
     }
 }

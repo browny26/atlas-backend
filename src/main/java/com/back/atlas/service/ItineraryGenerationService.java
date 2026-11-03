@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Objects;
 
 /** Generates itineraries by delegating to the AI microservice, grounded with Amadeus data. */
 @Service
@@ -57,6 +58,13 @@ public class ItineraryGenerationService {
         if (itinerary.getItinerary() == null || request.getDay() > itinerary.getItinerary().size()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Day does not exist in the itinerary");
         }
+        if (itinerary.getItinerary().stream().anyMatch(Objects::isNull)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Itinerary days must not be null");
+        }
+        // Blank feedback means "no feedback" (the AI service rejects empty strings).
+        String feedback = request.getFeedback() == null || request.getFeedback().isBlank()
+                ? null
+                : request.getFeedback().trim();
         List<String> interests = itinerary.getInterests() != null ? itinerary.getInterests() : List.of();
         AiServiceRequest trip = new AiServiceRequest(
                 itinerary.getDestination(),
@@ -66,7 +74,7 @@ public class ItineraryGenerationService {
                 List.of()); // no grounding here: a single day must stay fast
 
         AiServiceResponse response = aiClient.regenerateDay(new AiRegenerateDayRequest(
-                trip, AiItineraryMapper.toAiPlan(itinerary), request.getDay(), request.getFeedback()));
+                trip, AiItineraryMapper.toAiPlan(itinerary), request.getDay(), feedback));
         return AiItineraryMapper.toGeneratedItinerary(response, interests);
     }
 

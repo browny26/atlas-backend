@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Objects;
 
 /** CRUD on the current user's saved itineraries. Every query is scoped to that user. */
 @Service
@@ -23,6 +24,9 @@ public class ItineraryService {
     private final ItineraryRepository itineraryRepository;
 
     public ItineraryResponse saveForCurrentUser(SaveItineraryRequest request) {
+        if (request.getItinerary() != null && request.getItinerary().stream().anyMatch(Objects::isNull)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Itinerary days must not be null");
+        }
         Itinerary itinerary = ItineraryMapper.toEntity(request, getCurrentUser().getId());
         return ItineraryMapper.toResponse(itineraryRepository.save(itinerary));
     }
