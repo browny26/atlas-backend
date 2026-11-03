@@ -6,6 +6,8 @@ import com.back.atlas.dto.UserResponse;
 import com.back.atlas.entity.User;
 import com.back.atlas.enums.AuthProvider;
 import com.back.atlas.repository.UserRepository;
+import com.back.atlas.security.GoogleTokenVerifier;
+import com.back.atlas.security.GoogleTokenVerifier.GoogleUser;
 import com.back.atlas.security.JwtService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -16,52 +18,40 @@ public class GoogleAuthService {
 
     private final UserRepository userRepository;
     private final JwtService jwtService;
+    private final GoogleTokenVerifier tokenVerifier;
 
-    public GoogleAuthResponse authenticateWithGoogleData(GoogleLoginRequest request) {
-        try {
-            User user = findOrCreateUserFromGoogleData(request);
+    public GoogleAuthResponse authenticate(GoogleLoginRequest request) {
+        GoogleUser googleUser = tokenVerifier.verify(request.getAccessToken());
+        User user = userRepository.findByEmail(googleUser.email())
+                .map(existing -> updateFromGoogle(existing, googleUser))
+                .orElseGet(() -> createFromGoogle(googleUser));
 
-            String jwtToken = jwtService.generateToken(user);
-
-            return new GoogleAuthResponse(jwtToken, "Bearer", mapToUserResponse(user));
-
-        } catch (Exception e) {
-            throw new RuntimeException("Google authentication failed: " + e.getMessage());
-        }
+        return new GoogleAuthResponse(jwtService.generateToken(user), "Bearer", mapToUserResponse(user));
     }
 
-    private User findOrCreateUserFromGoogleData(GoogleLoginRequest request) {
-        return userRepository.findByEmail(request.getEmail())
-                .map(existingUser -> updateUserWithGoogleData(existingUser, request))
-                .orElseGet(() -> createNewUserFromGoogleData(request));
-    }
-
-    private User updateUserWithGoogleData(User user, GoogleLoginRequest request) {
+    /** Links an existing account to Google (safe: Google verified the email address). */
+    private User updateFromGoogle(User user, GoogleUser googleUser) {
         if (user.getProvider() != AuthProvider.GOOGLE) {
             user.setProvider(AuthProvider.GOOGLE);
-            user.setProviderId(request.getSub());
+            user.setProviderId(googleUser.sub());
         }
-
-        if (user.getAvatar() == null && request.getPicture() != null) {
-            user.setAvatar(request.getPicture());
+        if (user.getAvatar() == null && googleUser.picture() != null) {
+            user.setAvatar(googleUser.picture());
         }
-
-        if (user.getFirstName() == null && request.getName() != null) {
-            user.setFirstName(request.getName());
+        if (user.getFirstName() == null && googleUser.name() != null) {
+            user.setFirstName(googleUser.name());
         }
-
         return userRepository.save(user);
     }
 
-    private User createNewUserFromGoogleData(GoogleLoginRequest request) {
+    private User createFromGoogle(GoogleUser googleUser) {
         User user = new User();
-        user.setEmail(request.getEmail());
-        user.setFirstName(request.getGiven_name());
-        user.setLastName(request.getFamily_name());
-        user.setAvatar(request.getPicture());
+        user.setEmail(googleUser.email());
+        user.setFirstName(googleUser.givenName() != null ? googleUser.givenName() : googleUser.name());
+        user.setLastName(googleUser.familyName() != null ? googleUser.familyName() : "");
+        user.setAvatar(googleUser.picture());
         user.setProvider(AuthProvider.GOOGLE);
-        user.setProviderId(request.getSub());
-
+        user.setProviderId(googleUser.sub());
         return userRepository.save(user);
     }
 

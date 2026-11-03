@@ -1,13 +1,13 @@
 package com.back.atlas.dto;
 
+import com.google.gson.annotations.SerializedName;
+import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
+/** Only the Google access token: identity data is fetched from Google by the backend. */
 @Data
 public class GoogleLoginRequest {
-    private String sub;
-    private String email;
-    private String name;
-    private String picture;
-    private String given_name;
-    private String family_name;
+    @NotBlank
+    @SerializedName(value = "access_token", alternate = "accessToken")
+    private String accessToken;
 }

@@ -1,10 +1,10 @@
 package com.back.atlas.service;
 
+import com.back.atlas.exception.ExternalServiceException;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
+import lombok.RequiredArgsConstructor;
+import org.springframework.mail.MailException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
@@ -12,12 +12,9 @@ import org.springframework.stereotype.Service;
 import java.io.UnsupportedEncodingException;
 
 @Service
+@RequiredArgsConstructor
 public class EmailService {
-    @Autowired
-    private JavaMailSender mailSender;
-
-    @Value("${SPRING_MAIL_USERNAME}")
-    private String email;
+    private final JavaMailSender mailSender;
 
     public void sendResetPasswordEmail(String to, String link) {
         try {
@@ -27,17 +24,12 @@ public class EmailService {
             helper.setTo(to);
             helper.setSubject("Reset your password");
             helper.setFrom("noreply@atlas.com", "Atlas Support");
-            // helper.setReplyTo(email);
-
-
             String htmlContent = buildResetPasswordEmail(link);
             helper.setText(htmlContent, true);
 
             mailSender.send(message);
-        } catch (MessagingException e) {
-            throw new RuntimeException("Error while sending reset password email", e);
-        } catch (UnsupportedEncodingException e) {
-            throw new RuntimeException(e);
+        } catch (MessagingException | UnsupportedEncodingException | MailException e) {
+            throw new ExternalServiceException("Could not send the reset password email", e);
         }
     }
 

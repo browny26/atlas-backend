@@ -6,7 +6,6 @@ import com.back.atlas.entity.User;
 import com.back.atlas.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -16,51 +15,9 @@ public class UserService {
 
     private final UserRepository userRepository;
 
-    public UserResponse findByEmail(String email) {
-        return userRepository.findByEmail(email)
-                .map(user -> {
-                    UserResponse response = new UserResponse();
-                    response.setId(user.getId());
-                    response.setEmail(user.getEmail());
-                    response.setFirstName(user.getFirstName());
-                    response.setLastName(user.getLastName());
-                    response.setPhoneNumber(user.getPhoneNumber());
-                    response.setBio(user.getBio());
-                    response.setFacebookLink(user.getFacebookLink());
-                    response.setInstagramLink(user.getInstagramLink());
-                    response.setXLink(user.getXLink());
-                    response.setLinkedinLink(user.getLinkedinLink());
-                    response.setAvatar(user.getAvatar());
-                    response.setProvider(user.getProvider());
-                    if (user.getCreatedAt() != null) {
-                        response.setCreatedAt(user.getCreatedAt().toString());
-                    }
-                    return response;
-                })
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
-    }
-
     public UserResponse findById(Long id) {
         return userRepository.findById(id)
-                .map(user -> {
-                    UserResponse response = new UserResponse();
-                    response.setId(user.getId());
-                    response.setEmail(user.getEmail());
-                    response.setFirstName(user.getFirstName());
-                    response.setLastName(user.getLastName());
-                    response.setPhoneNumber(user.getPhoneNumber());
-                    response.setBio(user.getBio());
-                    response.setFacebookLink(user.getFacebookLink());
-                    response.setInstagramLink(user.getInstagramLink());
-                    response.setXLink(user.getXLink());
-                    response.setLinkedinLink(user.getLinkedinLink());
-                    response.setAvatar(user.getAvatar());
-                    response.setProvider(user.getProvider());
-                    if (user.getCreatedAt() != null) {
-                        response.setCreatedAt(user.getCreatedAt().toString());
-                    }
-                    return response;
-                })
+                .map(UserResponse::new)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
     }
 
