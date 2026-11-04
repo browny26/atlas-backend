@@ -1,7 +1,8 @@
 package com.back.atlas.service;
 
-import com.amadeus.exceptions.ResponseException;
 import com.back.atlas.client.ai.AiServiceRequest.KnownActivity;
+import com.back.atlas.client.places.ActivityProvider;
+import com.back.atlas.dto.Place;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -14,30 +15,35 @@ import static org.mockito.Mockito.*;
 
 class ActivityGroundingServiceTest {
 
-    private final AmadeusService amadeus = mock(AmadeusService.class);
+    private final ActivityProvider places = mock(ActivityProvider.class);
 
     private ActivityGroundingService service(Duration timeout) {
-        return new ActivityGroundingService(amadeus, true, 10, timeout);
+        return new ActivityGroundingService(places, true, 10, timeout);
+    }
+
+    private static Place place(String name, Boolean free) {
+        return Place.builder().name(name).category("Museum").free(free).build();
     }
 
     @Test
-    void searchesByCityName() throws Exception {
-        List<KnownActivity> activities = List.of(new KnownActivity("Louvre tour", 50.0));
-        when(amadeus.findActivities("Paris", 10)).thenReturn(activities);
+    void searchesByCityNameAndMarksFreeEntry() {
+        when(places.inCity("Paris", 10)).thenReturn(List.of(place("Louvre", false), place("Sacré-Cœur", true)));
 
-        assertThat(service(Duration.ofSeconds(2)).findActivities("Paris, France")).isEqualTo(activities);
+        assertThat(service(Duration.ofSeconds(2)).findActivities("Paris, France")).containsExactly(
+                new KnownActivity("Louvre", null),       // OSM has no prices
+                new KnownActivity("Sacré-Cœur", 0.0));   // fee=no: free entry
     }
 
     @Test
-    void returnsEmptyListWhenAmadeusFails() throws Exception {
-        when(amadeus.findActivities(anyString(), anyInt())).thenThrow(mock(ResponseException.class));
+    void returnsEmptyListWhenTheProviderFails() {
+        when(places.inCity(anyString(), anyInt())).thenThrow(new ActivityProvider.ProviderException("down", null));
 
         assertThat(service(Duration.ofSeconds(2)).findActivities("Paris")).isEmpty();
     }
 
     @Test
     void doesNotWaitLongerThanTheTimeout() throws Exception {
-        when(amadeus.findActivities(anyString(), anyInt())).thenAnswer(invocation -> {
+        when(places.inCity(anyString(), anyInt())).thenAnswer(invocation -> {
             Thread.sleep(2_000);
             return List.of();
         });
@@ -51,26 +57,26 @@ class ActivityGroundingServiceTest {
 
     @Test
     void timedOutLookupsAreCancelledAndDoNotLeakCapacity() throws Exception {
-        when(amadeus.findActivities(anyString(), anyInt())).thenAnswer(invocation -> {
+        when(places.inCity(anyString(), anyInt())).thenAnswer(invocation -> {
             Thread.sleep(5_000); // interrupted by the cancellation
             return List.of();
         });
         ActivityGroundingService service = service(Duration.ofMillis(30));
 
         // More calls than the in-flight limit (10): if cancelled lookups kept their permit,
-        // the later calls would skip Amadeus entirely.
+        // the later calls would skip the provider entirely.
         for (int i = 0; i < 15; i++) {
             service.findActivities("Paris");
             Thread.sleep(20); // let the interrupted task finish
         }
 
-        verify(amadeus, times(15)).findActivities("Paris", 10);
+        verify(places, times(15)).inCity("Paris", 10);
     }
 
     @Test
     void disabledMeansNoCall() {
-        new ActivityGroundingService(amadeus, false, 10, Duration.ofSeconds(1)).findActivities("Paris");
+        new ActivityGroundingService(places, false, 10, Duration.ofSeconds(1)).findActivities("Paris");
 
-        verifyNoInteractions(amadeus);
+        verifyNoInteractions(places);
     }
 }

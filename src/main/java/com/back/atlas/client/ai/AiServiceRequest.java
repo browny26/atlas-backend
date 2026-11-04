@@ -10,7 +10,7 @@ public record AiServiceRequest(
         List<String> interests,
         List<KnownActivity> knownActivities
 ) {
-    /** A real bookable activity (from Amadeus) the model should prefer: grounding. */
+    /** A real place (from OpenStreetMap) the model should prefer: grounding. priceEur is 0 for free entry, otherwise null. */
     public record KnownActivity(String name, Double priceEur) {
     }
 }
