@@ -82,6 +82,7 @@ docker compose up --build
 | http://localhost:5173 | Frontend |
 | http://localhost:8080/swagger-ui.html | Backend API docs (OpenAPI) |
 | http://localhost:8000/docs | AI service API docs |
+| http://localhost:1080 | E-mails sent by the backend (MailDev) |
 
 ### Backend only
 
@@ -91,6 +92,18 @@ Requirements: Java 21 and PostgreSQL (Maven comes with the wrapper).
 ./mvnw spring-boot:run      # reads .env through spring-dotenv
 ./mvnw verify               # all tests (the integration test needs Docker)
 ```
+
+### E-mails in local development
+
+Password reset e-mails can be caught locally instead of going through Gmail.
+[MailDev](https://github.com/maildev/maildev) receives them over SMTP and shows them in a web inbox:
+
+```bash
+npx maildev@2.2.1           # SMTP on localhost:1025, inbox on http://localhost:1080 (3.x needs Node ≥ 20.19)
+```
+
+Then add to `.env`: `MAIL_HOST=localhost`, `MAIL_PORT=1025`, `MAIL_SMTP_AUTH=false`,
+`MAIL_SMTP_STARTTLS=false`. `docker compose up` starts MailDev and sets these by itself.
 
 ---
 
@@ -177,6 +190,7 @@ Secrets are never committed: they come from environment variables (or a git-igno
 | `JWT_SECRET` | JWT signing key (≥ 32 characters) |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth |
 | `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD` | Gmail SMTP |
+| `MAIL_HOST`, `MAIL_PORT`, `MAIL_SMTP_AUTH`, `MAIL_SMTP_STARTTLS` | SMTP server (defaults: Gmail, `587`, `true`, `true`); MailDev locally |
 | `SUPABASE_SERVICE_KEY` | Supabase storage key |
 | `AI_SERVICE_URL` | AI service URL (default `http://localhost:8000`) |
 | `AI_SERVICE_API_KEY` | Shared secret, equal to `SERVICE_API_KEY` of the AI service |
