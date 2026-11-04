@@ -38,7 +38,9 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/v1/api/auth/**", "/amadeus/**", "/error").permitAll()
+                        .requestMatchers("/v1/api/auth/**", "/error").permitAll()
+                        // Airport search feeds the public flight form; activities need login.
+                        .requestMatchers(HttpMethod.GET, "/v1/api/airports").permitAll()
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         // Generation is public (guests can try the planner, rate limited);
                         // saving requires login.

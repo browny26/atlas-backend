@@ -18,7 +18,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.List;
 import java.util.Objects;
 
-/** Generates itineraries by delegating to the AI microservice, grounded with Amadeus data. */
+/** Generates itineraries by delegating to the AI microservice, grounded with real places (OpenStreetMap). */
 @Service
 @RequiredArgsConstructor
 public class ItineraryGenerationService {
