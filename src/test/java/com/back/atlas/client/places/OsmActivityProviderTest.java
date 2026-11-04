@@ -53,7 +53,7 @@ class OsmActivityProviderTest {
     @BeforeEach
     void setUp() {
         PlacesProperties properties = new PlacesProperties(
-                "https://overpass.test", "https://nominatim.test", "Atlas-Test", Duration.ofSeconds(5));
+                "https://overpass.test", "https://nominatim.test", "Atlas-Test", Duration.ofSeconds(5), Duration.ofMillis(300));
         RestClient.Builder builder = RestClient.builder();
         server = MockRestServiceServer.bindTo(builder).build();
         provider = new OsmActivityProvider(PlacesConfig.configure(builder, properties).build(), properties);
@@ -64,6 +64,7 @@ class OsmActivityProviderTest {
         server.expect(once(), requestTo(containsString("https://overpass.test/api/interpreter?data=")))
                 .andExpect(header("User-Agent", "Atlas-Test"))
                 .andExpect(decodedQuery("around:1000,41.890200,12.492200"))
+                .andExpect(decodedQuery(");out center 300;")) // "out tags" would drop node coordinates
                 .andRespond(withSuccess(OVERPASS, MediaType.APPLICATION_JSON));
 
         List<Place> places = provider.nearby(41.8902, 12.4922, 1000, 10);
@@ -133,6 +134,51 @@ class OsmActivityProviderTest {
 
         assertThatThrownBy(() -> provider.nearby(41.9, 12.5, 1000, 10))
                 .isInstanceOf(ActivityProvider.ProviderException.class);
+    }
+
+    @Test
+    void wikidataAloneCountsAsNotable() {
+        String overpass = """
+                {"elements": [
+                  {"type": "node", "id": 1, "lat": 41.8903, "lon": 12.4922, "tags": {"tourism": "attraction", "name": "Ordinary corner"}},
+                  {"type": "node", "id": 2, "lat": 41.8990, "lon": 12.4922, "tags": {"historic": "monument", "name": "Famous monument", "wikidata": "Q1"}}
+                ]}""";
+        server.expect(requestTo(containsString("/api/interpreter"))).andRespond(withSuccess(overpass, MediaType.APPLICATION_JSON));
+
+        assertThat(provider.nearby(41.8902, 12.4922, 2000, 10)).extracting(Place::getName)
+                .containsExactly("Famous monument", "Ordinary corner");
+    }
+
+    @Test
+    void overpassRuntimeErrorsAreFailuresAndAreNotCached() {
+        String timeout = """
+                {"elements": [], "remark": "runtime error: Query timed out in query at line 1 after 8 seconds."}""";
+        server.expect(once(), requestTo(containsString("/api/interpreter"))).andRespond(withSuccess(timeout, MediaType.APPLICATION_JSON));
+        server.expect(once(), requestTo(containsString("/api/interpreter"))).andRespond(withSuccess(OVERPASS, MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> provider.nearby(41.8902, 12.4922, 1000, 10))
+                .isInstanceOf(ActivityProvider.ProviderException.class)
+                .hasMessageContaining("runtime error");
+        assertThat(provider.nearby(41.8902, 12.4922, 1000, 10)).isNotEmpty(); // asked again, not cached
+
+        server.verify();
+    }
+
+    @Test
+    void nominatimRequestsAreSpacedOut() {
+        String rome = """
+                [{"lat": "41.89", "lon": "12.48"}]""";
+        server.expect(once(), requestTo(containsString("q=Rome"))).andRespond(withSuccess(rome, MediaType.APPLICATION_JSON));
+        server.expect(once(), requestTo(containsString("/api/interpreter"))).andRespond(withSuccess(OVERPASS, MediaType.APPLICATION_JSON));
+        server.expect(once(), requestTo(containsString("q=Paris"))).andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
+
+        long start = System.nanoTime();
+        provider.inCity("Rome", 5);
+        provider.inCity("Paris", 5);
+
+        server.verify();
+        // The second geocoding waited for the configured interval (300 ms in this test, 1 s by default).
+        assertThat(Duration.ofNanos(System.nanoTime() - start)).isGreaterThanOrEqualTo(Duration.ofMillis(290));
     }
 
     /** Matches text in the query string once URL-decoded. */

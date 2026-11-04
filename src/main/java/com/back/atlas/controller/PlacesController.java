@@ -35,7 +35,8 @@ public class PlacesController {
                                           @RequestParam(defaultValue = "1") int radius,
                                           @RequestParam(defaultValue = "1") int page,
                                           @RequestParam(defaultValue = "12") int size) {
-        if (Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
+        // !(x <= max) also rejects NaN, which fails every comparison.
+        if (!(Math.abs(latitude) <= 90) || !(Math.abs(longitude) <= 180)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid coordinates");
         }
         if (radius < 1 || radius > MAX_RADIUS_KM || page < 1 || size < 1 || size > 50) {

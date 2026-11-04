@@ -20,7 +20,8 @@ public class PageResponse<T> {
         this.size = size;
         this.total = all.size();
         this.totalPages = (int) Math.ceil((double) total / size);
-        int from = Math.min((page - 1) * size, total);
+        // long: (page - 1) * size can overflow an int for absurd page numbers.
+        int from = (int) Math.min((long) (page - 1) * size, total);
         int to = Math.min(from + size, total);
         this.data = List.copyOf(all.subList(from, to));
         this.hasNext = to < total;

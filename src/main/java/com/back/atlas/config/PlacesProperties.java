@@ -14,12 +14,14 @@ import java.time.Duration;
  * @param nominatimUrl Nominatim base URL
  * @param userAgent    identifies the app to the OSM services
  * @param timeout      read timeout for one request
+ * @param nominatimInterval minimum time between two Nominatim requests (its policy: 1 per second)
  */
 @ConfigurationProperties(prefix = "places.osm")
 public record PlacesProperties(
         @DefaultValue("https://overpass-api.de") String overpassUrl,
         @DefaultValue("https://nominatim.openstreetmap.org") String nominatimUrl,
         @DefaultValue("Atlas-Travel-Planner/1.0 (+https://github.com/browny26/atlas-backend)") String userAgent,
-        @DefaultValue("10s") Duration timeout
+        @DefaultValue("10s") Duration timeout,
+        @DefaultValue("1s") Duration nominatimInterval
 ) {
 }

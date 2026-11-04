@@ -25,8 +25,8 @@ import java.util.Map;
 @Service
 public class AirportDirectory {
 
-    /** Italian city names that the English dataset does not contain. */
-    private static final Map<String, String> CITY_ALIASES = Map.ofEntries(
+    /** Italian city names that the English dataset does not contain (keys normalized below). */
+    private static final Map<String, String> CITY_ALIASES = normalizeKeys(Map.ofEntries(
             Map.entry("roma", "rome"), Map.entry("milano", "milan"), Map.entry("venezia", "venice"),
             Map.entry("firenze", "florence"), Map.entry("napoli", "naples"), Map.entry("torino", "turin"),
             Map.entry("genova", "genoa"), Map.entry("parigi", "paris"), Map.entry("londra", "london"),
@@ -36,7 +36,7 @@ public class AirportDirectory {
             Map.entry("ginevra", "geneva"), Map.entry("zurigo", "zurich"), Map.entry("varsavia", "warsaw"),
             Map.entry("mosca", "moscow"), Map.entry("copenaghen", "copenhagen"), Map.entry("edimburgo", "edinburgh"),
             Map.entry("dublino", "dublin"), Map.entry("il cairo", "cairo"), Map.entry("pechino", "beijing"),
-            Map.entry("tokio", "tokyo"), Map.entry("nuova york", "new york"), Map.entry("città del messico", "mexico city"));
+            Map.entry("tokio", "tokyo"), Map.entry("nuova york", "new york"), Map.entry("città del messico", "mexico city")));
 
     private final List<Entry> airports;
 
@@ -85,6 +85,12 @@ public class AirportDirectory {
         private static boolean containsWord(String text, String query) {
             return text.startsWith(query) || text.contains(" " + query);
         }
+    }
+
+    private static Map<String, String> normalizeKeys(Map<String, String> aliases) {
+        Map<String, String> normalized = new java.util.HashMap<>();
+        aliases.forEach((key, value) -> normalized.put(normalize(key), value));
+        return Map.copyOf(normalized);
     }
 
     static String normalize(String text) {

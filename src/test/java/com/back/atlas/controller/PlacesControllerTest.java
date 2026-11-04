@@ -69,6 +69,24 @@ class PlacesControllerTest extends ControllerTestSupport {
     }
 
     @Test
+    void nanCoordinatesAreRejected() throws Exception {
+        mvc.perform(get("/v1/api/activities").with(loggedInAs(7)).param("latitude", "NaN").param("longitude", "12.5"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(activityProvider);
+    }
+
+    @Test
+    void aHugePageNumberGivesAnEmptyPageNotAnError() throws Exception {
+        when(activityProvider.nearby(anyDouble(), anyDouble(), anyInt(), anyInt())).thenReturn(places(3));
+
+        mvc.perform(get("/v1/api/activities").with(loggedInAs(7)).param("latitude", "41.9").param("longitude", "12.5")
+                        .param("page", String.valueOf(Integer.MAX_VALUE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(0))
+                .andExpect(jsonPath("$.hasNext").value(false));
+    }
+
+    @Test
     void providerDownIsA502WithAClearMessage() throws Exception {
         when(activityProvider.nearby(anyDouble(), anyDouble(), anyInt(), anyInt()))
                 .thenThrow(new ActivityProvider.ProviderException("timeout", null));

@@ -41,6 +41,8 @@ public class OsmActivityProvider implements ActivityProvider {
 
     private final RestClient restClient;
     private final PlacesProperties properties;
+    /** Nominatim allows one request per second per application (single backend instance). */
+    private final RequestPacer nominatimPacer;
 
     private final Cache<String, List<Place>> nearbyCache = Caffeine.newBuilder()
             .expireAfterWrite(Duration.ofHours(6))
@@ -54,6 +56,7 @@ public class OsmActivityProvider implements ActivityProvider {
     public OsmActivityProvider(@Qualifier("placesRestClient") RestClient restClient, PlacesProperties properties) {
         this.restClient = restClient;
         this.properties = properties;
+        this.nominatimPacer = new RequestPacer(properties.nominatimInterval());
     }
 
     @Override
@@ -89,7 +92,9 @@ public class OsmActivityProvider implements ActivityProvider {
                 + "nwr" + around + "[historic~\"^(monument|castle|ruins|archaeological_site|fort|palace|city_gate)$\"][name]" + notable + ";"
                 + "nwr" + around + "[leisure~\"^(park|garden|nature_reserve)$\"][name][wikidata];"
                 + "nwr" + around + "[amenity~\"^(theatre|arts_centre|marketplace)$\"][name]" + notable + ";"
-                + ");out center tags " + MAX_ELEMENTS + ";";
+                // "out center": body (node coordinates) plus a centre for ways and relations.
+                // ("out tags" would drop the coordinates of every node.)
+                + ");out center " + MAX_ELEMENTS + ";";
     }
 
     private List<Place> search(String query, double lat, double lon) {
@@ -106,7 +111,13 @@ public class OsmActivityProvider implements ActivityProvider {
         if (body == null || !body.path("elements").isArray()) {
             throw new ProviderException("Unexpected Overpass response", null);
         }
-        List<Place> places = rank(toPlaces(body.path("elements"), lat, lon));
+        // Timeouts and memory errors come back as HTTP 200 with a "remark" and partial (or
+        // no) elements: that is a failure, and it must not be cached as a valid answer.
+        String remark = body.path("remark").asText("");
+        if (remark.contains("runtime error")) {
+            throw new ProviderException("Overpass error: " + remark, null);
+        }
+        List<Place> places = rank(toCandidates(body.path("elements"), lat, lon));
         log.info("OpenStreetMap: {} places around {},{}", places.size(), lat, lon);
         return places;
     }
@@ -114,6 +125,7 @@ public class OsmActivityProvider implements ActivityProvider {
     private Optional<double[]> geocode(String city) {
         JsonNode body;
         try {
+            nominatimPacer.awaitTurn();
             body = restClient.get()
                     .uri(properties.nominatimUrl() + "/search?q={city}&format=jsonv2&limit=1&featureType=settlement", city)
                     .accept(MediaType.APPLICATION_JSON)
@@ -121,6 +133,9 @@ public class OsmActivityProvider implements ActivityProvider {
                     .body(JsonNode.class);
         } catch (RestClientException e) {
             throw new ProviderException("OpenStreetMap (Nominatim) request failed: " + e.getMessage(), e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ProviderException("Geocoding interrupted", e);
         }
         if (body == null || !body.isArray() || body.isEmpty()) {
             log.info("OpenStreetMap: city '{}' not found", city);
@@ -130,8 +145,12 @@ public class OsmActivityProvider implements ActivityProvider {
         return Optional.of(new double[]{first.path("lat").asDouble(), first.path("lon").asDouble()});
     }
 
-    private static List<Place> toPlaces(JsonNode elements, double fromLat, double fromLon) {
-        List<Place> places = new ArrayList<>();
+    /** A place plus what the ranking needs but the API does not return. */
+    record Candidate(Place place, boolean notable) {
+    }
+
+    private static List<Candidate> toCandidates(JsonNode elements, double fromLat, double fromLon) {
+        List<Candidate> places = new ArrayList<>();
         for (JsonNode element : elements) {
             JsonNode tags = element.path("tags");
             String name = text(tags, "name");
@@ -142,7 +161,7 @@ public class OsmActivityProvider implements ActivityProvider {
             }
             double lat = position.path("lat").asDouble();
             double lon = position.path("lon").asDouble();
-            places.add(Place.builder()
+            Place place = Place.builder()
                     .id(element.path("type").asText() + "/" + element.path("id").asText())
                     .name(name)
                     .category(category(tags))
@@ -156,23 +175,25 @@ public class OsmActivityProvider implements ActivityProvider {
                     .website(Optional.ofNullable(text(tags, "website")).orElse(text(tags, "contact:website")))
                     .wikipediaUrl(wikipediaUrl(text(tags, "wikipedia")))
                     .mapsUrl(String.format(Locale.ROOT, "https://www.google.com/maps/search/?api=1&query=%.6f%%2C%.6f", lat, lon))
-                    .build());
+                    .build();
+            places.add(new Candidate(place, tags.hasNonNull("wikidata") || tags.hasNonNull("wikipedia")));
         }
         return places;
     }
 
-    /** Notable first (Wikipedia/Wikidata, then a picture), then the closest. No duplicates. */
-    static List<Place> rank(List<Place> places) {
+    /** Notable first (Wikipedia or Wikidata entry, then a picture), then the closest. No duplicates. */
+    static List<Place> rank(List<Candidate> candidates) {
         Set<String> seen = new HashSet<>();
-        return places.stream()
+        return candidates.stream()
                 .sorted(Comparator.comparingInt(OsmActivityProvider::score).reversed()
-                        .thenComparing(Place::getDistanceMeters))
+                        .thenComparing(candidate -> candidate.place().getDistanceMeters()))
+                .map(Candidate::place)
                 .filter(place -> seen.add(place.getName().toLowerCase(Locale.ROOT)))
                 .toList();
     }
 
-    private static int score(Place place) {
-        return (place.getWikipediaUrl() != null ? 4 : 0) + (place.getImageUrl() != null ? 1 : 0);
+    private static int score(Candidate candidate) {
+        return (candidate.notable() ? 4 : 0) + (candidate.place().getImageUrl() != null ? 1 : 0);
     }
 
     private static String category(JsonNode tags) {

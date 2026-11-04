@@ -41,6 +41,8 @@ class AirportDirectoryTest {
         assertThat(codes("Roma")).contains("FCO", "CIA");
         assertThat(codes("Parigi")).contains("CDG", "ORY");
         assertThat(codes("zurich")).first().isEqualTo("ZRH"); // "Zürich" in the dataset
+        assertThat(codes("Città del Messico")).contains("MEX");
+        assertThat(codes("citta del messico")).contains("MEX");
     }
 
     @Test
